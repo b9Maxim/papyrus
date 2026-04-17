@@ -11,7 +11,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "PapyrusExample", targets: ["PapyrusExample"]),
-        .library(name: "Papyrus", targets: ["Papyrus"]),
+        .library(name: "Papyrus", type: .dynamic, targets: ["Papyrus"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-syntax", "600.0.0"..<"602.0.0"),
