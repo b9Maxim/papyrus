@@ -71,6 +71,8 @@ public struct RequestBuilder {
         case value(ContentValue)
         case fields([ContentKey: ContentValue])
         case multipart([ContentKey: Part])
+        /// A body set from a raw `Data` value, sent unchanged with no encoding.
+        case raw(Data)
     }
 
     // MARK: Data
@@ -153,7 +155,11 @@ public struct RequestBuilder {
             preconditionFailure("Tried to set a request @Body to type \(E.self), but it already had one: \(body).")
         }
 
-        body = .value(ContentValue(value))
+        if let raw = value as? Data {
+            body = .raw(raw)
+        } else {
+            body = .value(ContentValue(value))
+        }
     }
 
     public mutating func addField(_ key: String, value: Part, mapKey: Bool = true) {
@@ -199,11 +205,22 @@ public struct RequestBuilder {
     }
 
     public func bodyAndHeaders() throws -> (Data?, [String: String]) {
-        let body = try bodyData()
+        let data = try bodyData()
         var headers = headers
-        headers["Content-Type"] = requestBodyEncoder.contentType
-        headers["Content-Length"] = "\(body?.count ?? 0)"
-        return (body, headers)
+        if headers["Content-Type"] == nil {
+            headers["Content-Type"] = contentType(for: body)
+        }
+        headers["Content-Length"] = "\(data?.count ?? 0)"
+        return (data, headers)
+    }
+
+    /// `.raw` bypasses `requestBodyEncoder`, so it needs its own content type.
+    private func contentType(for content: Content?) -> String {
+        if case .raw = content {
+            return "application/octet-stream"
+        }
+
+        return requestBodyEncoder.contentType
     }
 
     private func parameterizedPath() throws -> String {
@@ -231,6 +248,8 @@ public struct RequestBuilder {
         switch body {
         case .none:
             return nil
+        case .raw(let data):
+            return data
         case .value(let value):
             return try requestBodyEncoder.encode(value)
         case .multipart(let fields):

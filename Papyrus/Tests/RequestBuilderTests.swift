@@ -106,6 +106,40 @@ final class RequestBuilderTests: XCTestCase {
         // 1. Assert Body
         XCTAssertTrue(["a=one&b=two", "b=two&a=one"].contains(body.string))
     }
+
+    func testDataBodyIsSentRaw() throws {
+        var req = RequestBuilder(baseURL: "foo/", method: "bar", path: "/baz")
+        req.requestBodyEncoder = JSONEncoder()
+        let raw = Data([0xDE, 0xAD, 0xBE, 0xEF])
+        req.setBody(raw)
+        let (body, headers) = try req.bodyAndHeaders()
+
+        XCTAssertEqual(body, raw)
+        XCTAssertEqual(headers, [
+            "Content-Type": "application/octet-stream",
+            "Content-Length": "4"
+        ])
+    }
+
+    func testExplicitContentTypeSurvives() throws {
+        var req = RequestBuilder(baseURL: "foo/", method: "bar", path: "/baz")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        req.requestBodyEncoder = encoder
+        req.addHeader("Content-Type", value: "application/vnd.custom+json", convertToHeaderCase: false)
+        req.addField("a", value: "one")
+        let (body, headers) = try req.bodyAndHeaders()
+        guard let body else {
+            XCTFail()
+            return
+        }
+
+        XCTAssertEqual(headers, [
+            "Content-Type": "application/vnd.custom+json",
+            "Content-Length": "\(body.count)"
+        ])
+        XCTAssertEqual(body.string, #"{"a":"one"}"#)
+    }
 }
 
 extension Data {
