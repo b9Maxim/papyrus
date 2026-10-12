@@ -452,6 +452,19 @@ struct MyInterceptor: Interceptor { ... }
 let provider = Provider(baseURL: "http://localhost:3000", modifiers: [MyRequestModifier()], interceptors: [MyInterceptor()])
 ```
 
+### Retrying
+
+`RetryInterceptor` sends a request again after a dropped or timed-out connection, or a 408, 429, 502, 503 or 504 response, with exponential backoff and jitter. It honors a numeric `Retry-After` header, and returns the last response unchanged once the attempts run out.
+
+Only `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried by default: a `POST` that timed out may already have reached the server. Pass `retryableMethods` to opt other methods in. Put it last in the interceptors, closest to the network.
+
+```swift
+let provider = Provider(
+    baseURL: "http://localhost:3000",
+    interceptors: [MyAuthInterceptor(), RetryInterceptor(maxAttempts: 3)]
+)
+```
+
 ### Callback APIs
 
 [Swift concurrency](https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html) is the modern way of running asynchronous code in Swift.
