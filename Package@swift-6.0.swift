@@ -68,6 +68,9 @@ let package = Package(
             dependencies: [
                 "PapyrusPlugin",
                 .product(name: "MacroTesting", package: "swift-macro-testing"),
+                // Swift Build does not link these MacroTesting dependencies into the test bundle on its own.
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftOperators", package: "swift-syntax"),
             ],
             path: "PapyrusPlugin/Tests"
         ),
