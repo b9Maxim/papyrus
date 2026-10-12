@@ -6,7 +6,8 @@ public struct CurlLogger {
     public enum Condition: Sendable {
         case always
 
-        /// only log when the request encountered an error
+        /// only log when the request failed: a thrown error, a response carrying an error,
+        /// or a status code outside 200..<300
         case onError
     }
     
@@ -29,15 +30,36 @@ extension CurlLogger: Interceptor {
             logHandler(req.curl(sortedHeaders: true))
         }
 
+        let res: any PapyrusResponse
         do {
-            let res = try await next(req)
-            return res
+            res = try await next(req)
         } catch {
             if condition == .onError {
                 logHandler(req.curl(sortedHeaders: true))
             }
             throw error
         }
+
+        // The URLSession driver returns failures inside the response instead of throwing them.
+        if condition == .onError, res.isFailure {
+            logHandler(req.curl(sortedHeaders: true))
+        }
+
+        return res
+    }
+}
+
+extension PapyrusResponse {
+    fileprivate var isFailure: Bool {
+        if error != nil {
+            return true
+        }
+
+        guard let statusCode else {
+            return false
+        }
+
+        return !(200..<300).contains(statusCode)
     }
 }
 

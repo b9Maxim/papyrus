@@ -465,6 +465,17 @@ let provider = Provider(
 )
 ```
 
+### Logging requests as cURL
+
+`CurlLogger` prints each request as a `curl` command, through `print` or your own handler. `.always` logs every request; `.onError` logs a request that failed: a thrown error, a response carrying an error (the URLSession driver returns failures this way instead of throwing), or a status code outside 200..<300.
+
+```swift
+let provider = Provider(
+    baseURL: "http://localhost:3000",
+    interceptors: [CurlLogger(when: .onError, using: { logger.debug("\($0)") })]
+)
+```
+
 ### Callback APIs
 
 [Swift concurrency](https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html) is the modern way of running asynchronous code in Swift.

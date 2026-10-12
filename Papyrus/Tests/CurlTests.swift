@@ -195,7 +195,73 @@ final class CurlTests: XCTestCase {
             XCTAssertNil(resource, "Logger did output")
         }
     }
+
+    func testInterceptorOnErrorLogsResponseCarryingError() async throws {
+        let request = try _loggedRequest()
+        let messages: ResourceMutex<[String]> = .init(resource: [])
+        let logger = CurlLogger(when: .onError, using: { value in messages.withLock { $0.append(value) } })
+
+        _ = try await logger.intercept(req: request) { req in
+            TestResponse(request: req, error: URLError(.notConnectedToInternet))
+        }
+
+        messages.withLock { XCTAssertEqual($0, [_loggedCurl]) }
+    }
+
+    func testInterceptorOnErrorLogsUnsuccessfulStatus() async throws {
+        let request = try _loggedRequest()
+        let messages: ResourceMutex<[String]> = .init(resource: [])
+        let logger = CurlLogger(when: .onError, using: { value in messages.withLock { $0.append(value) } })
+
+        _ = try await logger.intercept(req: request) { req in
+            TestResponse(request: req, statusCode: 500)
+        }
+
+        messages.withLock { XCTAssertEqual($0, [_loggedCurl]) }
+    }
+
+    func testInterceptorOnErrorSkipsSuccessfulStatus() async throws {
+        let request = try _loggedRequest()
+        let messages: ResourceMutex<[String]> = .init(resource: [])
+        let logger = CurlLogger(when: .onError, using: { value in messages.withLock { $0.append(value) } })
+
+        _ = try await logger.intercept(req: request) { req in
+            TestResponse(request: req, statusCode: 200)
+        }
+
+        messages.withLock { XCTAssertEqual($0, []) }
+    }
+
+    func testInterceptorOnErrorLogsOnceAndRethrowsThrownError() async throws {
+        let request = try _loggedRequest()
+        let messages: ResourceMutex<[String]> = .init(resource: [])
+        let logger = CurlLogger(when: .onError, using: { value in messages.withLock { $0.append(value) } })
+
+        do {
+            _ = try await logger.intercept(req: request) { _ in throw URLError(.timedOut) }
+            XCTFail("The logger must rethrow the error of the interceptor below it.")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .timedOut)
+        }
+
+        messages.withLock { XCTAssertEqual($0, [_loggedCurl]) }
+    }
 }
+
+private func _loggedRequest() throws -> TestRequest {
+    var req = RequestBuilder(baseURL: "foo/", method: "GET", path: "/baz")
+    req.addQuery("Hello", value: "There")
+    req.addHeader("High", value: "Ground")
+    return try TestRequest(from: req)
+}
+
+private let _loggedCurl = """
+    curl 'foo/baz?Hello=There' \\
+    -X GET \\
+    -H 'Content-Length: 0' \\
+    -H 'Content-Type: application/json' \\
+    -H 'High: Ground'
+    """
 
 private struct TestResponse: PapyrusResponse {
     var request: (any PapyrusRequest)? = nil
