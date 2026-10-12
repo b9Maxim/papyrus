@@ -140,6 +140,63 @@ final class RequestBuilderTests: XCTestCase {
         ])
         XCTAssertEqual(body.string, #"{"a":"one"}"#)
     }
+
+    func testLowercaseContentTypeIsNotDuplicated() throws {
+        var req = RequestBuilder(baseURL: "foo/", method: "bar", path: "/baz")
+        req.requestBodyEncoder = JSONEncoder()
+        req.addHeaders(["content-type": "application/vnd.custom+json"])
+        req.addField("a", value: "one")
+        let (_, headers) = try req.bodyAndHeaders()
+
+        XCTAssertEqual(headers, [
+            "content-type": "application/vnd.custom+json",
+            "Content-Length": "11"
+        ])
+    }
+
+    func testMultipartSkipsNilOptionalPart() throws {
+        var req = RequestBuilder(baseURL: "foo/", method: "bar", path: "/baz")
+        let encoder = MultipartEncoder(boundary: UUID().uuidString)
+        req.requestBodyEncoder = encoder
+        let missing: Part? = nil
+        req.addField("a", value: Part(data: Data("one".utf8)))
+        req.addField("b", value: missing)
+        let (body, _) = try req.bodyAndHeaders()
+
+        XCTAssertEqual(body?.string, """
+            --\(encoder.boundary)\r
+            Content-Disposition: form-data; name="a"\r
+            \r
+            one\r
+            --\(encoder.boundary)--\r
+
+            """
+        )
+    }
+
+    func testMultipartSendsNonNilOptionalPart() throws {
+        var req = RequestBuilder(baseURL: "foo/", method: "bar", path: "/baz")
+        let encoder = MultipartEncoder(boundary: UUID().uuidString)
+        req.requestBodyEncoder = encoder
+        let present: Part? = Part(data: Data("two".utf8))
+        req.addField("a", value: Part(data: Data("one".utf8)))
+        req.addField("b", value: present)
+        let (body, _) = try req.bodyAndHeaders()
+
+        XCTAssertEqual(body?.string, """
+            --\(encoder.boundary)\r
+            Content-Disposition: form-data; name="a"\r
+            \r
+            one\r
+            --\(encoder.boundary)\r
+            Content-Disposition: form-data; name="b"\r
+            \r
+            two\r
+            --\(encoder.boundary)--\r
+
+            """
+        )
+    }
 }
 
 extension Data {

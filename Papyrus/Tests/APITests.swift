@@ -79,6 +79,39 @@ final class APITests: XCTestCase {
         XCTAssertNotNil(person)
         XCTAssertEqual(person.name, "Petru")
     }
+
+    func testMultipartEndpointOmitsNilOptionalPart() async throws {
+        // Arrange
+        let sut = _UploadsAPI(provider: .init(baseURL: "", http: _EchoHTTPService()))
+
+        // Act
+        let response = try await sut.upload(file: Part(data: Data("one".utf8)), thumbnail: nil)
+
+        // Assert
+        let body = String(decoding: response.request?.body ?? Data(), as: UTF8.self)
+        XCTAssertTrue(body.contains(#"name="file""#))
+        XCTAssertFalse(body.contains(#"name="thumbnail""#))
+    }
+}
+
+@API()
+@Multipart
+fileprivate protocol _Uploads {
+
+    @POST("upload")
+    func upload(file: Part, thumbnail: Part?) async throws -> PapyrusResponse
+}
+
+/// Echoes the built request back inside the response, so a test can read what was sent.
+fileprivate struct _EchoHTTPService: HTTPService {
+
+    func build(method: String, url: URL, headers: [String: String], body: Data?) -> any PapyrusRequest {
+        _Request(url: url, method: method, headers: headers, body: body)
+    }
+
+    func request(_ req: any PapyrusRequest) async -> any PapyrusResponse {
+        _Response(request: req, statusCode: 200)
+    }
 }
 
 @API()

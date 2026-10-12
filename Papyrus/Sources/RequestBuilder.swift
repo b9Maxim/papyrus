@@ -177,6 +177,12 @@ public struct RequestBuilder {
         body = .multipart(parts)
     }
 
+    /// A `nil` part is left out, so a `@Multipart` endpoint can take a `Part?` parameter.
+    public mutating func addField(_ key: String, value: Part?, mapKey: Bool = true) {
+        guard let value else { return }
+        addField(key, value: value, mapKey: mapKey)
+    }
+
     public mutating func addField<E: Encodable>(_ key: String, value: E, mapKey: Bool = true) {
         var fields: [ContentKey: ContentValue] = [:]
         if let body = body {
@@ -207,7 +213,8 @@ public struct RequestBuilder {
     public func bodyAndHeaders() throws -> (Data?, [String: String]) {
         let data = try bodyData()
         var headers = headers
-        if headers["Content-Type"] == nil {
+        // Header names are case-insensitive: an explicit `content-type` must not get a second `Content-Type`.
+        if !headers.keys.contains(where: { $0.lowercased() == "content-type" }) {
             headers["Content-Type"] = contentType(for: body)
         }
         headers["Content-Length"] = "\(data?.count ?? 0)"
