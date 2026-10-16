@@ -44,6 +44,25 @@ final class URLEncodedFormEncoderTests: XCTestCase {
         }
     }
 
+    private struct PerElementContainers: Encodable {
+        func encode(to encoder: any Encoder) throws {
+            var first = encoder.unkeyedContainer()
+            try first.encode("1")
+            var second = encoder.unkeyedContainer()
+            try second.encode("2")
+        }
+    }
+
+    /// A stray array left in storage would hide the top-level map from the repeated keyed call, dropping `b`.
+    private struct RepeatedUnkeyedThenRepeatedKeyed: Encodable {
+        func encode(to encoder: any Encoder) throws {
+            var first = encoder.container(keyedBy: AnyKey.self)
+            try first.encode(PerElementContainers(), forKey: AnyKey("list"))
+            var second = encoder.container(keyedBy: AnyKey.self)
+            try second.encode("2", forKey: AnyKey("b"))
+        }
+    }
+
     private func pairs(_ string: String) -> Set<String> {
         Set(string.split(separator: "&").map(String.init))
     }
@@ -71,6 +90,12 @@ final class URLEncodedFormEncoderTests: XCTestCase {
             "creds[password]=p",
             "b=2"
         ])
+    }
+
+    func testRepeatedUnkeyedContainerKeepsEveryElementAndLeavesNoStrayStorage() throws {
+        let output: String = try URLEncodedFormEncoder().encode(RepeatedUnkeyedThenRepeatedKeyed())
+        XCTAssertEqual(output.split(separator: "&").filter { $0.hasPrefix("list") }, ["list[]=1", "list[]=2"])
+        XCTAssertEqual(pairs(output), ["list[]=1", "list[]=2", "b=2"])
     }
 
     func testSynthesizedEncodableIsUnchanged() throws {

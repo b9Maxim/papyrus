@@ -215,7 +215,13 @@ private class _URLEncodedFormEncoder: Encoder {
     }
 
     func unkeyedContainer() -> any UnkeyedEncodingContainer {
-        let container = self.storage.pushUnkeyedContainer()
+        let container: URLEncodedFormNode.Array
+        if !self.canEncodeNewValue, case .array(let existing) = self.storage.topContainer {
+            // A repeated `unkeyedContainer()` on this level appends to the array it already has.
+            container = existing
+        } else {
+            container = self.storage.pushUnkeyedContainer()
+        }
         return UKEC(referencing: self, container: container)
     }
 
