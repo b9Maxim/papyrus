@@ -1,4 +1,4 @@
-//===----------------------------------------------------------------------===//
+// ===----------------------------------------------------------------------===//
 //
 // This source file is part of the Hummingbird server framework project
 //
@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-//===----------------------------------------------------------------------===//
+// ===----------------------------------------------------------------------===//
 
 import Foundation
 
@@ -40,7 +40,7 @@ public struct URLEncodedFormEncoder: Sendable {
 
     /// The strategy to use in Encoding dates. Defaults to `.deferredToDate`.
     public var dateEncodingStrategy: DateEncodingStrategy
-    
+
     /// Custom mapping of key names
     public var keyMapping: KeyMapping
 
@@ -120,8 +120,20 @@ private class _URLEncodedFormEncoder: Encoder {
         self.result = nil
     }
 
+    /// One container per coding path level, as in Foundation's JSONEncoder: a level that already
+    /// pushed a container has one more container than coding path keys.
+    private var canEncodeNewValue: Bool {
+        self.storage.count == self.codingPath.count
+    }
+
     func container<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key> where Key: CodingKey {
-        let keyedContainer = self.storage.pushKeyedContainer()
+        let keyedContainer: URLEncodedFormNode.Map
+        if !self.canEncodeNewValue, case .map(let existing) = self.storage.topContainer {
+            // A repeated `container(keyedBy:)` on this level writes into the map it already has.
+            keyedContainer = existing
+        } else {
+            keyedContainer = self.storage.pushKeyedContainer()
+        }
         if self.result == nil {
             self.result = .map(keyedContainer)
         }
@@ -203,7 +215,13 @@ private class _URLEncodedFormEncoder: Encoder {
     }
 
     func unkeyedContainer() -> any UnkeyedEncodingContainer {
-        let container = self.storage.pushUnkeyedContainer()
+        let container: URLEncodedFormNode.Array
+        if !self.canEncodeNewValue, case .array(let existing) = self.storage.topContainer {
+            // A repeated `unkeyedContainer()` on this level appends to the array it already has.
+            container = existing
+        } else {
+            container = self.storage.pushUnkeyedContainer()
+        }
         return UKEC(referencing: self, container: container)
     }
 
@@ -373,6 +391,10 @@ private struct URLEncodedFormEncoderStorage {
         self.keyMapping = keyMapping
         // containers.append(.map(.init()))
     }
+
+    var count: Int { self.containers.count }
+
+    var topContainer: URLEncodedFormNode? { self.containers.last }
 
     /// push a new container onto the storage
     mutating func pushKeyedContainer() -> URLEncodedFormNode.Map {
